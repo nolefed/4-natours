@@ -6,17 +6,21 @@ const catchAsync = require('./../utils/catchAsync');
 const AppError = require('./../utils/appError');
 const sendEmail = require('./../utils/email');
 
+// Signtoke is designed to create a JSON Web token. it takes ID which is i think users ID
+
+
 const signToken = id => {
    return jwt.sign({ id}, process.env.JWT_SECRET, {
       expiresIn: process.env.JWT_EXPIRES_IN
    });
 };
 
+// Creates a JWT, setting it as a cookie and send the JSON response to the client
 const createSendToken = (user,statusCode, res) =>{
    const token = signToken(user._id);
    const cookieOptions = {
       expires: new Date(Date.now()+ process.env.JWT_COOKIE_EXPIRES_IN *24*60*60*1000 ),
-      httpOnly: true
+      httpOnly: true   // makes the cookie accessible only by the server, preventing client side java script from accessing it 
    };
    if( process.env.NODE_ENV === 'production') cookieOptions.secure = true;
 
@@ -33,7 +37,7 @@ const createSendToken = (user,statusCode, res) =>{
  });
 };
 
-
+// For sign up, first new user details are copied and then call is sent to create JWT.
 
 exports.signup = catchAsync(async (req,res,next) => {
  const newUser = await User.create({
@@ -62,10 +66,11 @@ exports.login = catchAsync(async (req,res,next) => {
       return next(new AppError('Incorrect Email or password', 401))
    }
 
-   //3) if everything ok, send token to client
+   //3) if everything ok, send token to client and by client we mean web browser
    createSendToken(user,200,res);
 });
 
+// since this is a PROTECT methos i think this should be called at the time of GET request.
 exports.protect = catchAsync ( async (req,res,next) => {
    // 1) Getting token and check if its there
    let token;
@@ -75,8 +80,12 @@ exports.protect = catchAsync ( async (req,res,next) => {
    if(!token){
       return next(new AppError('You are not logged in! Please log in to get access', 401));
    }
+
+   //process.env.JWT_SECRET stays same even if lets say there are 500 users in the application
    // 2) Verification token
    const decoded = await promisify(jwt.verify)(token, process.env.JWT_SECRET);
+
+   // after verifying JWT decoded payload is stored in the decoded variable.
 
    //3) Check if user still exists
    const freshUser = await User.findById(decoded.id);
@@ -90,6 +99,7 @@ exports.protect = catchAsync ( async (req,res,next) => {
    }
 
    // GRANT ACCESS TO PROTECTED ROUTE
+   // req.user property is generally undefined or does not exists at all. so it has to be assigned explicitly like in the code below.
    req.user=freshUser;
    next();
 
